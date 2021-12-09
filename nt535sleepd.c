@@ -16,6 +16,7 @@
 // input device that corresponds to the sleep button
 #define SLEEP_BTN_DEV "/dev/input/event3"
 #define ACPI_DEV "/dev/acpi"
+#define INACTIVITY_COOLDOWN 2
 // pidfile for the daemon
 #define PID_FILE "/var/run/nt535sleepd.pid"
 
@@ -113,8 +114,10 @@ static void sleep_button_event_loop()
 		event = libinput_get_event(sb.context);
 
 		// check if a new event is in the queue
-		if (event == NULL)
+		if (event == NULL) {
+			sleep(INACTIVITY_COOLDOWN);
 			continue;
+		}
 
 		// check to see if the occured event that has occured is a "keyboard" aka button press event.
 		if (libinput_event_get_type(event) != LIBINPUT_EVENT_KEYBOARD_KEY)
