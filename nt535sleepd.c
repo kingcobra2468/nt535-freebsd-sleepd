@@ -1,11 +1,16 @@
 #include <sys/ioctl.h>
+#include <sys/param.h>
 
+#include <err.h>
+#include <libutil.h>
 #include <stdlib.h>
+#include <signal.h>
 #include <stdio.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <libinput.h>
+#include <input-event-codes.h>
 #include <acpiio.h>
 
 #define SLEEP_BTN_DEV "/dev/input/event3"
@@ -13,16 +18,26 @@
 
 static int open_restricted(const char *, int, void *);
 static void close_restricted(int, void *);
+static void acpi_init();
+static void acpi_suspend();
+static void sleep_button_init();
+static void sleep_button_event_loop();
+static void sleep_buton_destroy();
 
 static struct sleep_button
 {
 	struct libinput *context;
 	struct libinput_device *device;
-};
+} sb;
 
-static struct sleep_button sb;
 static int acpi_fd;
 static const int acpi_mode = 3;
+
+static void signal_handler(int sig)
+{
+	sleep_buton_destroy();
+	exit(sig);
+}
 
 static int open_restricted(const char *path, int flags, void *user_data)
 {
@@ -40,16 +55,16 @@ static void acpi_init()
 	if (acpi_fd)
 		return;
 
-	acpifd = open(ACPI_DEV, O_RDWR);
+	acpi_fd = open(ACPI_DEV, O_RDWR);
 	if (acpi_fd == -1)
 		exit(errno);
 }
 
 static void acpi_suspend()
 {
-	int ret = ioctl(acpifd, ACPIIO_REQSLPSTATE, &acpi_mode);
+	int ret = ioctl(acpi_fd, ACPIIO_REQSLPSTATE, &acpi_mode);
 	if (ret == -1)
-		exit(errno)
+		exit(errno);
 }
 
 static void sleep_button_init()
@@ -69,7 +84,8 @@ static void sleep_button_init()
 	}
 	libinput_device_ref(device);
 
-	sb = {li, device};
+	sb.context = li;
+	sb.device = device;
 }
 
 static void sleep_button_event_loop()
@@ -89,14 +105,15 @@ static void sleep_button_event_loop()
 			continue;
 
 		key = libinput_event_get_keyboard_event(event);
-		if (key != KEY_SLEEP)
+		if (libinput_event_keyboard_get_key(key) != KEY_SLEEP)
 			continue;
 
 		libinput_event_destroy(event);
-	}
+		free(event);
+		free(key);
 
-	free(event);
-	free(key);
+		acpi_suspend();
+	}
 }
 
 static void sleep_buton_destroy()
@@ -110,6 +127,32 @@ static void sleep_buton_destroy()
 
 int main(void)
 {
+	struct pidfh *pfh;
+	pid_t otherpid, childpid;
 
+	pfh = pidfile_open("/var/run/daemon.pid", 0600, &otherpid);
+	if (pfh == NULL)
+	{
+		if (errno == EEXIST)
+		{
+			errx(EXIT_FAILURE, "Daemon already running, pid: %jd.",
+				 (intmax_t)otherpid);
+		}
+		warn("Cannot open or create pidfile");
+	}
+
+	if (daemon(0, 0) == -1)
+	{
+		warn("Cannot daemonize");
+		pidfile_remove(pfh);
+		exit(EXIT_FAILURE);
+	}
+	pidfile_write(pfh);
+
+	sleep_button_init();
+	acpi_init();
+	sleep_button_event_loop();
+
+	pidfile_remove(pfh);
 	return 0;
 }
