@@ -1,0 +1,18 @@
+#!/bin/sh
+
+# PROVIDE: nt535sleepd
+# REQUIRE: DAEMON
+# BEFORE:  LOGIN
+# KEYWORD: nojail
+
+. /etc/rc.subr
+
+name="nt535sleepd"
+rcvar=nt535sleepd_enable
+
+command="/usr/sbin/${name}"
+
+pidfile="/var/run/${name}.pid"
+
+load_rc_config $name
+run_rc_command "$1"

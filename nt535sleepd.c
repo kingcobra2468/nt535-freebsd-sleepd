@@ -15,6 +15,7 @@
 
 #define SLEEP_BTN_DEV "/dev/input/event3"
 #define ACPI_DEV "/dev/acpi"
+#define PID_FILE "/var/run/nt535sleepd.pid"
 
 static int open_restricted(const char *, int, void *);
 static void close_restricted(int, void *);
@@ -130,7 +131,7 @@ int main(void)
 	struct pidfh *pfh;
 	pid_t otherpid, childpid;
 
-	pfh = pidfile_open("/var/run/daemon.pid", 0600, &otherpid);
+	pfh = pidfile_open(PID_FILE, 0600, &otherpid);
 	if (pfh == NULL)
 	{
 		if (errno == EEXIST)
