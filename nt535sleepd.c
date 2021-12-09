@@ -13,8 +13,10 @@
 #include <input-event-codes.h>
 #include <acpiio.h>
 
+// input device that corresponds to the sleep button
 #define SLEEP_BTN_DEV "/dev/input/event3"
 #define ACPI_DEV "/dev/acpi"
+// pidfile for the daemon
 #define PID_FILE "/var/run/nt535sleepd.pid"
 
 static int open_restricted(const char *, int, void *);
@@ -31,26 +33,34 @@ static struct sleep_button
 	struct libinput_device *device;
 } sb;
 
+// fd for the acpi device
 static int acpi_fd;
+// always use ACPI s3 in order to put machine to sleep
 static const int acpi_mode = 3;
 
+// handler for system events
 static void signal_handler(int sig)
 {
 	sleep_buton_destroy();
 	exit(sig);
 }
 
+// opens the sleep button device for libinput
 static int open_restricted(const char *path, int flags, void *user_data)
 {
+	(void)user_data;
 	int fd = open(path, flags);
 	return fd < 0 ? -errno : fd;
 }
 
+// closes the sleep button device for libinput
 static void close_restricted(int fd, void *user_data)
 {
+	(void)user_data;
 	close(fd);
 }
 
+// opens the acpi device to get the fd for further operations
 static void acpi_init()
 {
 	if (acpi_fd)
@@ -61,6 +71,7 @@ static void acpi_init()
 		exit(errno);
 }
 
+// sends a S3 command to the machine to put machine to suspend state
 static void acpi_suspend()
 {
 	int ret = ioctl(acpi_fd, ACPIIO_REQSLPSTATE, &acpi_mode);
@@ -68,6 +79,7 @@ static void acpi_suspend()
 		exit(errno);
 }
 
+// initializes the sleep button device for libinput
 static void sleep_button_init()
 {
 	struct libinput *li;
@@ -89,6 +101,7 @@ static void sleep_button_init()
 	sb.device = device;
 }
 
+// starts the event loop to listen for sleep button presses
 static void sleep_button_event_loop()
 {
 	struct libinput_event *event;
@@ -99,13 +112,17 @@ static void sleep_button_event_loop()
 		libinput_dispatch(sb.context);
 		event = libinput_get_event(sb.context);
 
+		// check if a new event is in the queue
 		if (event == NULL)
 			continue;
 
+		// check to see if the occured event that has occured is a "keyboard" aka button press event.
 		if (libinput_event_get_type(event) != LIBINPUT_EVENT_KEYBOARD_KEY)
 			continue;
 
 		key = libinput_event_get_keyboard_event(event);
+		// check if the event is for the correct key-type. This is a theortical case as in theory
+		// the button should always propogate a keycode of 142 (sleep key).
 		if (libinput_event_keyboard_get_key(key) != KEY_SLEEP)
 			continue;
 
@@ -113,10 +130,12 @@ static void sleep_button_event_loop()
 		free(event);
 		free(key);
 
+		// suspend the machine
 		acpi_suspend();
 	}
 }
 
+// destroys the handler of the sleep button for libinput
 static void sleep_buton_destroy()
 {
 	libinput_unref(sb.context);
@@ -131,6 +150,7 @@ int main(void)
 	struct pidfh *pfh;
 	pid_t otherpid, childpid;
 
+	// attempt to open pidfile for holding onto daemon pid
 	pfh = pidfile_open(PID_FILE, 0600, &otherpid);
 	if (pfh == NULL)
 	{
@@ -142,6 +162,7 @@ int main(void)
 		warn("Cannot open or create pidfile");
 	}
 
+	// daemonize this process
 	if (daemon(0, 0) == -1)
 	{
 		warn("Cannot daemonize");
