@@ -5,7 +5,7 @@ LIBS      = -linput -lutil
 TARGET    = nt535sleepd
 BUILD_DIR = build
 
-$(TARGET): build nt535sleepd.c
+$(TARGET): setup nt535sleepd.c
 	$(CC) $< -o $(BUILD_DIR)/$@ $(CFLAGS) $(LDFLAGS) $(LIBS)
 
 .PHONY: setup

@@ -25,7 +25,7 @@ static void acpi_init();
 static void acpi_suspend();
 static void sleep_button_init();
 static void sleep_button_event_loop();
-static void sleep_buton_destroy();
+static void sleep_button_destroy();
 
 static struct sleep_button
 {
@@ -41,7 +41,7 @@ static const int acpi_mode = 3;
 // handler for system events
 static void signal_handler(int sig)
 {
-	sleep_buton_destroy();
+	sleep_button_destroy();
 	exit(sig);
 }
 
@@ -136,7 +136,7 @@ static void sleep_button_event_loop()
 }
 
 // destroys the handler of the sleep button for libinput
-static void sleep_buton_destroy()
+static void sleep_button_destroy()
 {
 	libinput_unref(sb.context);
 	libinput_path_remove_device(sb.device);
